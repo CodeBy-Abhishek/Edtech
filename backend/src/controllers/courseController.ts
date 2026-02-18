@@ -45,6 +45,8 @@ export const getCourses = async (req: Request, res: Response) => {
 export const getCourseDetails = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
+        const userId = (req as AuthRequest).user?.userId;
+
         const course = await prisma.course.findUnique({
             where: { id },
             include: {
@@ -56,7 +58,12 @@ export const getCourseDetails = async (req: Request, res: Response) => {
                             include: {
                                 lessons: {
                                     orderBy: { order: 'asc' },
-                                    include: { resources: true }
+                                    include: {
+                                        resources: true,
+                                        lessonProgress: userId ? {
+                                            where: { userId }
+                                        } : false
+                                    }
                                 }
                             }
                         }
@@ -75,6 +82,27 @@ export const getCourseDetails = async (req: Request, res: Response) => {
     }
 };
 
+export const completeLesson = async (req: AuthRequest, res: Response) => {
+    try {
+        const userId = req.user?.userId;
+        const { lessonId } = req.body;
+
+        if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+        const progress = await prisma.lessonProgress.upsert({
+            where: {
+                userId_lessonId: { userId, lessonId }
+            },
+            update: { isCompleted: true },
+            create: { userId, lessonId, isCompleted: true }
+        });
+
+        res.json(progress);
+    } catch (error) {
+        res.status(500).json({ message: 'Error completing lesson', error });
+    }
+};
+
 export const addModule = async (req: AuthRequest, res: Response) => {
     try {
         const { courseId, title, order } = req.body;
@@ -84,6 +112,18 @@ export const addModule = async (req: AuthRequest, res: Response) => {
         res.status(201).json(module);
     } catch (error) {
         res.status(500).json({ message: 'Error adding module', error });
+    }
+};
+
+export const addTopic = async (req: AuthRequest, res: Response) => {
+    try {
+        const { moduleId, title, order } = req.body;
+        const topic = await prisma.topic.create({
+            data: { moduleId, title, order: parseInt(order) }
+        });
+        res.status(201).json(topic);
+    } catch (error) {
+        res.status(500).json({ message: 'Error adding topic', error });
     }
 };
 
@@ -127,7 +167,7 @@ export const getStudentDashboard = async (req: AuthRequest, res: Response) => {
         const formattedCourses = enrollments.map(e => ({
             id: e.course.id,
             title: e.course.title,
-            instructor: e.course.instructor.name || 'Unknown',
+            instructor: e.course.instructor?.name || 'Unknown',
             progress: e.progress,
             image: e.course.thumbnailUrl || "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=1470&auto=format&fit=crop",
             lessons: 0, // Need deeper query for lesson count, mock for now or use module count * 5
@@ -145,6 +185,7 @@ export const getStudentDashboard = async (req: AuthRequest, res: Response) => {
             enrolledCourses: formattedCourses
         });
     } catch (error) {
+        console.error("Dashboard Error:", error);
         res.status(500).json({ message: 'Error fetching dashboard', error });
     }
 };

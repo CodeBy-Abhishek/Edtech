@@ -18,12 +18,12 @@ export const getNotes = async (req: AuthRequest, res: Response) => {
 export const createNote = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user?.userId;
-        const { title, content } = req.body;
+        const { title, content, courseId, lessonId } = req.body;
 
         if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
         const note = await prisma.note.create({
-            data: { userId, title, content }
+            data: { userId, title, content, courseId, lessonId }
         });
         res.status(201).json(note);
     } catch (error) {

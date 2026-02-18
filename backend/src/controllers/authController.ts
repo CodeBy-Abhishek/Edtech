@@ -2,10 +2,42 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import prisma from '../lib/prisma';
 import { generateAccessToken, generateRefreshToken, verifyRefreshToken } from '../utils/auth';
+import { OAuth2Client } from 'google-auth-library';
+import axios from 'axios';
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Verify CAPTCHA Token
+const verifyCaptcha = async (token: string | undefined) => {
+    if (!token) return false;
+
+    try {
+        const secretKey = process.env.RECAPTCHA_SECRET_KEY;
+        if (!secretKey) {
+            console.warn("RECAPTCHA_SECRET_KEY is not set. Skipping verification (DEV MODE).");
+            return true;
+        }
+
+        const response = await axios.post(
+            `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`
+        );
+
+        return response.data.success;
+    } catch (error) {
+        console.error("ReCAPTCHA verification error:", error);
+        return false;
+    }
+};
+
 
 export const register = async (req: Request, res: Response) => {
     try {
-        const { email, password, name, role } = req.body;
+        const { email, password, name, role, captchaToken } = req.body;
+
+        const isCaptchaValid = await verifyCaptcha(captchaToken);
+        if (!isCaptchaValid) {
+            return res.status(400).json({ message: 'Invalid CAPTCHA' });
+        }
 
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
@@ -30,7 +62,13 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
     try {
-        const { email, password, forceLogin } = req.body;
+        const { email, password, forceLogin, captchaToken } = req.body;
+
+        const isCaptchaValid = await verifyCaptcha(captchaToken);
+        if (!isCaptchaValid) {
+            return res.status(400).json({ message: 'Invalid CAPTCHA' });
+        }
+
         const device = req.headers['user-agent'] || 'unknown';
         const ip = req.ip || 'unknown';
 
@@ -111,6 +149,53 @@ export const refreshToken = async (req: Request, res: Response) => {
         res.json({ accessToken: newAccessToken });
     } catch (error) {
         res.status(401).json({ message: 'Invalid token' });
+    }
+};
+
+export const googleLogin = async (req: Request, res: Response) => {
+    try {
+        const { token, role } = req.body;
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        if (!payload || !payload.email) {
+            return res.status(400).json({ message: 'Invalid Google token' });
+        }
+
+        const { email, name, picture } = payload;
+
+        let user = await prisma.user.findUnique({ where: { email } });
+
+        if (!user) {
+            // Create user if not exists
+            user = await prisma.user.create({
+                data: {
+                    email,
+                    name: name || 'Google User',
+                    password: await bcrypt.hash(Math.random().toString(36).slice(-10), 10), // Random password
+                    role: role || 'STUDENT',
+                },
+            });
+        }
+
+        const accessToken = generateAccessToken(user.id, user.role);
+        const refreshToken = generateRefreshToken(user.id);
+
+        await prisma.refreshToken.create({
+            data: {
+                token: refreshToken,
+                userId: user.id,
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            }
+        });
+
+        res.json({ accessToken, refreshToken, user: { id: user.id, email: user.email, role: user.role, name: user.name } });
+    } catch (error) {
+        console.error('Google Auth Error:', error);
+        res.status(500).json({ message: 'Google authentication failed', error });
     }
 };
 

@@ -13,7 +13,10 @@ import securityRoutes from './routes/securityRoutes';
 import userRoutes from './routes/userRoutes';
 import noteRoutes from './routes/noteRoutes';
 import assignmentRoutes from './routes/assignmentRoutes';
+
 import adminRoutes from './routes/adminRoutes';
+import { handleStripeWebhook } from './controllers/webhookController';
+import { simulateWebhook } from './controllers/testController';
 
 dotenv.config();
 
@@ -38,6 +41,9 @@ const io = new Server(server, {
 // Initialize Socket Service
 new SocketService(io);
 
+// Webhook Route - Must be before express.json()
+app.post('/api/webhook', express.raw({ type: 'application/json' }), handleStripeWebhook);
+
 app.use(cors());
 app.use(express.json());
 
@@ -55,6 +61,8 @@ app.use('/api/user', userRoutes);
 app.use('/api/notes', noteRoutes);
 app.use('/api/assignments', assignmentRoutes);
 app.use('/api/admin', adminRoutes);
+
+app.post('/api/test/simulate-webhook', simulateWebhook);
 
 app.get('/', (req: Request, res: Response) => {
     res.send('EdTech Platform Backend API is running...');

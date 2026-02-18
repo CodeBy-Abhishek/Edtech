@@ -59,13 +59,15 @@ export const issueCertificate = async (req: AuthRequest, res: Response) => {
         }
 
         // 3. Issue Certificate
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+
         const certificate = await prisma.certificate.create({
             data: {
                 certificateId: `CERT-${uuidv4().substring(0, 8).toUpperCase()}`,
                 userId,
                 courseId,
                 metadata: {
-                    userName: req.user?.name || 'Student',
+                    userName: user?.name || 'Student',
                     courseTitle: course.title,
                     grade: 'A+' // Simplified
                 }

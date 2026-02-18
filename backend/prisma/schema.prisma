@@ -38,6 +38,7 @@ model User {
   notifications   Notification[]
   chatMessages    ChatMessage[]
   notes           Note[]
+  lessonProgress  LessonProgress[]
   bio             String?
   isActive        Boolean        @default(true)
 }
@@ -46,6 +47,8 @@ model Note {
   id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseId  String?
+  lessonId  String?
   title     String
   content   String
   createdAt DateTime @default(now())
@@ -62,6 +65,7 @@ model Course {
   thumbnailUrl  String?
   price         Float        @default(0)
   isPublished   Boolean      @default(false)
+  isTrending    Boolean      @default(false)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   modules       Module[]
@@ -115,6 +119,7 @@ model Lesson {
   labs        Lab[]
   quizzes     Quiz[]
   assignments Assignment[]
+  lessonProgress LessonProgress[]
   createdAt   DateTime @default(now())
 }
 
@@ -226,6 +231,18 @@ model Enrollment {
   expiresAt  DateTime? // Course access expiry date
   createdAt  DateTime @default(now())
   @@unique([userId, courseId])
+}
+
+model LessonProgress {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@unique([userId, lessonId])
 }
 
 model Payment {
