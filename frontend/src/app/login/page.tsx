@@ -1,8 +1,11 @@
 "use client";
 import { GoogleLogin } from '@react-oauth/google';
-import React, { useState, useRef } from 'react'; // Added useRef
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import ReCAPTCHA from "react-google-recaptcha"; // Added import
+import ReCAPTCHA from "react-google-recaptcha";
+
+const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || '';
+const IS_CAPTCHA_ENABLED = RECAPTCHA_SITE_KEY.length > 0;
 import {
     Mail,
     Lock,
@@ -58,8 +61,8 @@ export default function AuthPage() {
             return;
         }
 
-        if (!captchaToken) {
-            setError('Please verify that you are not a robot.'); // Added check
+        if (IS_CAPTCHA_ENABLED && !captchaToken) {
+            setError('Please verify that you are not a robot.');
             return;
         }
 
@@ -291,14 +294,16 @@ export default function AuthPage() {
                         </div>
                     </div>
 
-                    <div className="flex justify-center">
-                        <ReCAPTCHA
-                            ref={recaptchaRef}
-                            sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!}
-                            onChange={(token) => setCaptchaToken(token)}
-                            theme="dark"
-                        />
-                    </div>
+                    {IS_CAPTCHA_ENABLED && (
+                        <div className="flex justify-center">
+                            <ReCAPTCHA
+                                ref={recaptchaRef}
+                                sitekey={RECAPTCHA_SITE_KEY}
+                                onChange={(token) => setCaptchaToken(token)}
+                                theme="dark"
+                            />
+                        </div>
+                    )}
 
                     {/* Google OAuth */}
                     <div className="space-y-4">
